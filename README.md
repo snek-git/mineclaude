@@ -11,9 +11,33 @@ MineClaude is a voxel engine and survival game inspired by Minecraft, written in
 
 ## How it was built
 
-The project used a **continuous autonomous development loop**. The full workflow documentation is in [`.claude/WORKFLOW.md`](.claude/WORKFLOW.md), and the project conventions are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
+This project was built using Claude Code's **agent teams** feature — multiple Claude agents running in parallel, coordinating through a shared task list and message passing. One lead agent (never writing code itself) orchestrated the entire process, spawning and managing specialized teammate agents.
 
-The core loop:
+The full workflow documentation is in [`.claude/WORKFLOW.md`](.claude/WORKFLOW.md), and the project conventions are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
+
+### Agent teams
+
+Claude Code's agent teams allow a lead agent to spawn multiple sub-agents that work concurrently. Each agent runs as an independent Claude Code instance with its own context, tools, and file access. They communicate via direct messages and coordinate through a shared task board.
+
+The team structure for each development round:
+
+```
+Lead (Delegator — coordinates only, never writes code)
+  ├── Watchdog        — scans codebase for bugs, gaps, and Minecraft inaccuracies
+  ├── Implementer A   — owns specific source files (e.g. world generation)
+  ├── Implementer B   — owns different files (e.g. UI module)
+  ├── Implementer C   — owns different files (e.g. player mechanics)
+  ├── Tester          — writes tests for all changed code
+  └── Reviewer        — mandatory code review gate before changes are accepted
+```
+
+Key design decisions that made this work:
+- **Strict module ownership** — each implementer was assigned specific files and could only edit those, preventing merge conflicts between parallel agents
+- **Implementers stay alive through review** — agents aren't shut down after finishing their task; they stay idle so the reviewer can send fixes back without re-spawning and losing context
+- **Shared task board** — all agents read from the same task list, claim work, and mark completion. The lead monitors progress and redirects stuck agents
+- **Message-based coordination** — agents communicate through direct messages for cross-module API contracts (e.g. "I added a new BlockType variant, here's the signature")
+
+### The development loop
 
 ```
 DETECT → PRIORITIZE → IMPLEMENT → TEST → REVIEW → VERIFY → repeat
@@ -21,20 +45,10 @@ DETECT → PRIORITIZE → IMPLEMENT → TEST → REVIEW → VERIFY → repeat
 
 1. **Watchdog agent** continuously scans the codebase for bugs, missing features, and Minecraft inaccuracies
 2. **Lead agent** prioritizes findings and decomposes them into tasks
-3. **Implementer agents** are spawned in parallel, each assigned strict module ownership (specific files only) to prevent conflicts
+3. **Implementer agents** are spawned in parallel, each assigned strict module ownership
 4. **Tester agent** writes tests for all new/changed code
 5. **Reviewer agent** audits all changes — if issues are found, they're sent back to the (still-alive) implementers for fixes
 6. **Verify** the build compiles and tests pass, then loop back to step 1
-
-```
-Lead (Delegator — never writes code)
-  ├── Watchdog        — finds bugs + suggests features
-  ├── Implementer A   — e.g. world generation module
-  ├── Implementer B   — e.g. UI module
-  ├── Implementer C   — e.g. player mechanics
-  ├── Tester          — writes tests for changed code
-  └── Reviewer        — mandatory code review gate
-```
 
 This ran across 12+ development rounds. The lead managed all coordination, task assignment, code review, and conflict resolution between agents.
 
