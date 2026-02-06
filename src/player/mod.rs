@@ -15,7 +15,7 @@ pub struct SpawnPoint(pub Vec3);
 
 impl Default for SpawnPoint {
     fn default() -> Self {
-        Self(Vec3::new(0.0, 80.0, 0.0))
+        Self(Vec3::new(0.0, 100.0, 0.0))
     }
 }
 
@@ -23,7 +23,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (spawn_player, interaction::setup_break_overlay, interaction::setup_block_highlight))
+        app.add_systems(Startup, (spawn_player, interaction::setup_break_overlay))
             .init_resource::<SpawnPoint>()
             .init_resource::<interaction::BreakingState>()
             .init_resource::<physics::HungerTimers>()
@@ -79,7 +79,6 @@ impl Plugin for PlayerPlugin {
                         .after(interaction::BlockInteractSet)
                         .after(interaction::eat_food)
                         .after(interaction::plant_seeds),
-                    interaction::update_block_highlight,
                 ),
             );
     }
@@ -213,7 +212,10 @@ fn spawn_player(mut commands: Commands, mut spawn_point: ResMut<SpawnPoint>) {
             data.saturation.unwrap_or(5.0),
         )
     } else {
-        (Vec3::new(0.0, 80.0, 0.0), 0.0, 0.0, 20.0, 10.0, 20.0, 5.0)
+        let terrain_y = crate::world::generation::sample_terrain_height(0, 0);
+        let spawn_pos = Vec3::new(0.0, (terrain_y + 1) as f32, 0.0);
+        spawn_point.0 = spawn_pos;
+        (spawn_pos, 0.0, 0.0, 20.0, 10.0, 20.0, 5.0)
     };
 
     // Load armor from save

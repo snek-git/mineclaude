@@ -526,13 +526,14 @@ pub fn despawn_dead_mobs(
     mut commands: Commands,
     mobs: Query<(Entity, &MobHealth, &Mob, &Transform)>,
     drop_assets: Res<super::dropped_item::DroppedItemAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut death_audio: bevy::ecs::message::MessageWriter<crate::audio::MobDeathAudio>,
 ) {
     for (entity, health, mob, transform) in &mobs {
         if health.current <= 0.0 {
             let drop_pos = transform.translation;
             for (item, count) in mob.mob_type.loot_drops() {
-                super::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, item, count, drop_pos);
+                super::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, item, count, drop_pos);
             }
             death_audio.write(crate::audio::MobDeathAudio);
             commands.entity(entity).despawn();

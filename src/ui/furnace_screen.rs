@@ -40,7 +40,7 @@ pub struct FurnaceProgressBar;
 pub struct FurnaceFuelBar;
 
 #[derive(Component)]
-pub struct FurnaceInvSlot(usize);
+pub struct FurnaceInvSlot(pub(crate) usize);
 
 #[derive(Component)]
 pub struct FurnaceInvSlotCount(usize);

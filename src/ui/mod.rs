@@ -63,6 +63,8 @@ impl Plugin for UiPlugin {
                     hud::spawn_hunger_bar,
                     hud::spawn_armor_bar,
                     hotbar::spawn_hotbar.after(setup_ui_atlas),
+                    inventory_screen::spawn_cursor_item_display.after(setup_ui_atlas),
+                    common::spawn_slot_hover_tooltip,
                 ),
             )
             .add_systems(
@@ -91,6 +93,7 @@ impl Plugin for UiPlugin {
                     inventory_screen::update_inventory_ui,
                     inventory_screen::update_armor_slots_ui,
                     inventory_screen::update_cursor_item_display,
+                    common::update_slot_hover_tooltip,
                 ),
             )
             .add_systems(

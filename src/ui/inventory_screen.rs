@@ -18,13 +18,13 @@ pub struct CursorItem(pub Option<(Item, u8, u16)>);
 pub(crate) struct InventoryUiRoot;
 
 #[derive(Component)]
-pub(crate) struct InventorySlot(usize);
+pub(crate) struct InventorySlot(pub(crate) usize);
 
 #[derive(Component)]
 pub(crate) struct InventorySlotCount(usize);
 
 #[derive(Component)]
-pub(crate) struct CraftingSlot(usize);
+pub(crate) struct CraftingSlot(pub(crate) usize);
 
 #[derive(Component)]
 pub(crate) struct CraftingSlotCount(usize);
@@ -39,10 +39,52 @@ pub(crate) struct CraftingOutputCount;
 pub(crate) struct CursorItemDisplay;
 
 #[derive(Component)]
-pub(crate) struct ArmorSlotUi(usize); // 0=helmet, 1=chest, 2=legs, 3=boots
+pub(crate) struct ArmorSlotUi(pub(crate) usize); // 0=helmet, 1=chest, 2=legs, 3=boots
 
 #[derive(Component)]
 pub(crate) struct ArmorSlotCount(usize);
+
+#[derive(Component)]
+pub(crate) struct CursorItemCount;
+
+/// Spawn a persistent cursor item display entity (shown when holding items in any UI screen).
+pub fn spawn_cursor_item_display(mut commands: Commands, atlas: Res<UiAtlas>) {
+    commands
+        .spawn((
+            CursorItemDisplay,
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Px(SLOT_SIZE - 8.0),
+                height: Val::Px(SLOT_SIZE - 8.0),
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            ImageNode {
+                image: atlas.image.clone(),
+                texture_atlas: None,
+                color: Color::NONE,
+                ..default()
+            },
+            ZIndex(200),
+            Visibility::Hidden,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                CursorItemCount,
+                Text::new(""),
+                TextColor(Color::WHITE),
+                TextFont { font_size: 11.0, ..default() },
+                Node {
+                    position_type: PositionType::Absolute,
+                    right: Val::Px(0.0),
+                    bottom: Val::Px(0.0),
+                    ..default()
+                },
+            ));
+        });
+}
 
 pub fn toggle_inventory(
     keys: Res<ButtonInput<KeyCode>>,
@@ -392,20 +434,6 @@ pub fn spawn_inventory_ui(
                     }
                 });
 
-            // Cursor item display
-            parent.spawn((
-                CursorItemDisplay,
-                Node {
-                    position_type: PositionType::Absolute,
-                    width: Val::Px(SLOT_SIZE - 8.0),
-                    height: Val::Px(SLOT_SIZE - 8.0),
-                    left: Val::Px(0.0),
-                    top: Val::Px(0.0),
-                    ..default()
-                },
-                BackgroundColor(Color::NONE),
-                Visibility::Hidden,
-            ));
         });
 }
 
@@ -652,27 +680,37 @@ pub fn update_armor_slots_ui(
 /// Update the cursor item display to follow the mouse.
 pub fn update_cursor_item_display(
     cursor_item: Res<CursorItem>,
+    atlas: Res<UiAtlas>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    mut display_q: Query<(&mut Node, &mut BackgroundColor, &mut Visibility), With<CursorItemDisplay>>,
+    mut display_q: Query<(&mut Node, &mut ImageNode, &mut BackgroundColor, &mut Visibility), With<CursorItemDisplay>>,
+    mut count_q: Query<&mut Text, With<CursorItemCount>>,
 ) {
-    let Ok((mut node, mut bg, mut vis)) = display_q.single_mut() else {
+    let Ok((mut node, mut img, mut bg, mut vis)) = display_q.single_mut() else {
         return;
     };
 
     match &cursor_item.0 {
-        Some((item, _, _)) => {
+        Some((_, count, _)) => {
             *vis = Visibility::Visible;
-            *bg = BackgroundColor(item_display_color(*item));
+            update_slot_visual(&atlas, &cursor_item.0, &mut img, &mut bg);
             if let Ok(window) = windows.single() {
                 if let Some(pos) = window.cursor_position() {
                     node.left = Val::Px(pos.x - 16.0);
                     node.top = Val::Px(pos.y - 16.0);
                 }
             }
+            if let Ok(mut text) = count_q.single_mut() {
+                **text = if *count > 1 { format!("{}", count) } else { String::new() };
+            }
         }
         None => {
             *vis = Visibility::Hidden;
+            img.texture_atlas = None;
+            img.color = Color::NONE;
             *bg = BackgroundColor(Color::NONE);
+            if let Ok(mut text) = count_q.single_mut() {
+                **text = String::new();
+            }
         }
     }
 }

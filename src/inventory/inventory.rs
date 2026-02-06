@@ -23,13 +23,15 @@ impl Default for Inventory {
 
 impl Inventory {
     /// Add one item to the inventory. Returns false if inventory is full.
+    /// Prioritizes hotbar (slots 27-35) over main inventory (slots 0-26).
     pub fn add_item(&mut self, item: Item) -> bool {
         let max = item.max_stack();
         let dur = item.max_durability();
-        // First, try to stack onto an existing slot with the same item type (non-tools only)
+        let hotbar_start = INVENTORY_SLOTS - INVENTORY_COLS;
+        // First, try to stack onto an existing slot (hotbar first, then main)
         if max > 1 {
-            for slot in self.slots.iter_mut() {
-                if let Some((it, count, _)) = slot {
+            for i in (hotbar_start..INVENTORY_SLOTS).chain(0..hotbar_start) {
+                if let Some((it, count, _)) = &mut self.slots[i] {
                     if *it == item && *count < max {
                         *count += 1;
                         return true;
@@ -37,10 +39,10 @@ impl Inventory {
                 }
             }
         }
-        // Otherwise, find the first empty slot
-        for slot in self.slots.iter_mut() {
-            if slot.is_none() {
-                *slot = Some((item, 1, dur));
+        // Otherwise, find the first empty slot (hotbar first, then main)
+        for i in (hotbar_start..INVENTORY_SLOTS).chain(0..hotbar_start) {
+            if self.slots[i].is_none() {
+                self.slots[i] = Some((item, 1, dur));
                 return true;
             }
         }
@@ -95,11 +97,14 @@ mod tests {
         }
     }
 
+    const HOTBAR_START: usize = INVENTORY_SLOTS - INVENTORY_COLS; // 27
+
     #[test]
     fn add_item_to_empty_inventory() {
         let mut inv = empty_inventory();
         assert!(inv.add_item(Item::Block(BlockType::Stone)));
-        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Stone), 1, 0)));
+        // Should go to hotbar first (slot 27)
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::Block(BlockType::Stone), 1, 0)));
     }
 
     #[test]
@@ -107,8 +112,8 @@ mod tests {
         let mut inv = empty_inventory();
         inv.add_item(Item::Block(BlockType::Stone));
         inv.add_item(Item::Block(BlockType::Stone));
-        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Stone), 2, 0)));
-        assert_eq!(inv.slots[1], None);
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::Block(BlockType::Stone), 2, 0)));
+        assert_eq!(inv.slots[HOTBAR_START + 1], None);
     }
 
     #[test]
@@ -116,17 +121,19 @@ mod tests {
         let mut inv = empty_inventory();
         inv.add_item(Item::Block(BlockType::Stone));
         inv.add_item(Item::Block(BlockType::Dirt));
-        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Stone), 1, 0)));
-        assert_eq!(inv.slots[1], Some((Item::Block(BlockType::Dirt), 1, 0)));
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::Block(BlockType::Stone), 1, 0)));
+        assert_eq!(inv.slots[HOTBAR_START + 1], Some((Item::Block(BlockType::Dirt), 1, 0)));
     }
 
     #[test]
     fn add_item_respects_max_stack() {
         let mut inv = empty_inventory();
-        inv.slots[0] = Some((Item::Block(BlockType::Stone), 64, 0));
+        // Fill a hotbar slot to max
+        inv.slots[HOTBAR_START] = Some((Item::Block(BlockType::Stone), 64, 0));
         assert!(inv.add_item(Item::Block(BlockType::Stone)));
-        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Stone), 64, 0)));
-        assert_eq!(inv.slots[1], Some((Item::Block(BlockType::Stone), 1, 0)));
+        // Original slot unchanged, overflow goes to next hotbar slot
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::Block(BlockType::Stone), 64, 0)));
+        assert_eq!(inv.slots[HOTBAR_START + 1], Some((Item::Block(BlockType::Stone), 1, 0)));
     }
 
     #[test]
@@ -134,9 +141,9 @@ mod tests {
         let mut inv = empty_inventory();
         inv.add_item(Item::WoodenPickaxe);
         inv.add_item(Item::WoodenPickaxe);
-        // Tools have max_stack=1, so they should use separate slots with durability
-        assert_eq!(inv.slots[0], Some((Item::WoodenPickaxe, 1, 59)));
-        assert_eq!(inv.slots[1], Some((Item::WoodenPickaxe, 1, 59)));
+        // Tools have max_stack=1, so they should use separate hotbar slots with durability
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::WoodenPickaxe, 1, 59)));
+        assert_eq!(inv.slots[HOTBAR_START + 1], Some((Item::WoodenPickaxe, 1, 59)));
     }
 
     #[test]
@@ -185,20 +192,20 @@ mod tests {
         inv.add_item(Item::Block(BlockType::Glass));
         inv.add_item(Item::Block(BlockType::Glass));
         inv.add_item(Item::Block(BlockType::Glass));
-        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Glass), 3, 0)));
-        inv.remove_item(0);
-        inv.remove_item(0);
-        inv.remove_item(0);
-        assert_eq!(inv.slots[0], None);
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::Block(BlockType::Glass), 3, 0)));
+        inv.remove_item(HOTBAR_START);
+        inv.remove_item(HOTBAR_START);
+        inv.remove_item(HOTBAR_START);
+        assert_eq!(inv.slots[HOTBAR_START], None);
     }
 
     #[test]
     fn use_tool_decrements_durability() {
         let mut inv = empty_inventory();
         inv.add_item(Item::WoodenPickaxe);
-        assert_eq!(inv.slots[0], Some((Item::WoodenPickaxe, 1, 59)));
-        assert!(!inv.use_tool(0)); // not broken yet
-        assert_eq!(inv.slots[0], Some((Item::WoodenPickaxe, 1, 58)));
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::WoodenPickaxe, 1, 59)));
+        assert!(!inv.use_tool(HOTBAR_START)); // not broken yet
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::WoodenPickaxe, 1, 58)));
     }
 
     #[test]
@@ -207,6 +214,30 @@ mod tests {
         inv.slots[0] = Some((Item::WoodenPickaxe, 1, 1));
         assert!(inv.use_tool(0)); // tool breaks
         assert_eq!(inv.slots[0], None);
+    }
+
+    #[test]
+    fn add_item_fills_hotbar_then_main() {
+        let mut inv = empty_inventory();
+        // Fill all hotbar slots
+        for i in 0..INVENTORY_COLS {
+            inv.slots[HOTBAR_START + i] = Some((Item::Block(BlockType::Bedrock), 64, 0));
+        }
+        // Next item should go to main inventory slot 0
+        assert!(inv.add_item(Item::Block(BlockType::Stone)));
+        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Stone), 1, 0)));
+    }
+
+    #[test]
+    fn add_item_stacks_hotbar_before_main() {
+        let mut inv = empty_inventory();
+        // Put stone in both hotbar and main
+        inv.slots[0] = Some((Item::Block(BlockType::Stone), 10, 0));
+        inv.slots[HOTBAR_START] = Some((Item::Block(BlockType::Stone), 10, 0));
+        inv.add_item(Item::Block(BlockType::Stone));
+        // Should stack in hotbar first
+        assert_eq!(inv.slots[HOTBAR_START], Some((Item::Block(BlockType::Stone), 11, 0)));
+        assert_eq!(inv.slots[0], Some((Item::Block(BlockType::Stone), 10, 0)));
     }
 
     #[test]

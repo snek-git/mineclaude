@@ -141,30 +141,36 @@ impl TerrainNoise {
     /// Returns true if this position should be carved out as a cave.
     /// Uses three cave types: cheese (chambers), spaghetti (tunnels), noodle (thin passages).
     fn is_cave(&self, wx: i32, wy: i32, wz: i32, terrain_height: i32) -> bool {
-        // No caves at bedrock, above terrain, or at the surface block itself
-        if wy <= 0 || wy >= terrain_height - 1 {
+        // No caves at bedrock
+        if wy <= 0 {
             return false;
         }
         let (x, y, z) = (wx as f64, wy as f64, wz as f64);
 
-        // Cheese caves — large chambers (Fbm frequency already set to 0.02)
-        let cheese = self.cave_cheese.get([x, y, z]);
-        if cheese > CHEESE_THRESHOLD {
-            return true;
+        // Cheese caves — large chambers, keep 4-block surface protection (giant holes look ugly)
+        if wy <= terrain_height - 4 {
+            let cheese = self.cave_cheese.get([x, y, z]);
+            if cheese > CHEESE_THRESHOLD {
+                return true;
+            }
         }
 
-        // Spaghetti caves — winding tunnels at zero-crossings
-        let spa_a = self.cave_spaghetti_a.get([x * 0.04, y * 0.04, z * 0.04]);
-        let spa_b = self.cave_spaghetti_b.get([x * 0.04, y * 0.04, z * 0.04]);
-        if spa_a.abs() + spa_b.abs() < SPAGHETTI_THRESHOLD {
-            return true;
+        // Spaghetti caves — winding tunnels, no surface protection (natural entrances)
+        if wy <= terrain_height {
+            let spa_a = self.cave_spaghetti_a.get([x * 0.04, y * 0.04, z * 0.04]);
+            let spa_b = self.cave_spaghetti_b.get([x * 0.04, y * 0.04, z * 0.04]);
+            if spa_a.abs() + spa_b.abs() < SPAGHETTI_THRESHOLD {
+                return true;
+            }
         }
 
-        // Noodle caves — thin squiggly passages
-        let noo_a = self.cave_noodle_a.get([x * 0.08, y * 0.08, z * 0.08]);
-        let noo_b = self.cave_noodle_b.get([x * 0.08, y * 0.08, z * 0.08]);
-        if noo_a.abs() + noo_b.abs() < NOODLE_THRESHOLD {
-            return true;
+        // Noodle caves — thin squiggly passages, no surface protection (small openings)
+        if wy <= terrain_height {
+            let noo_a = self.cave_noodle_a.get([x * 0.08, y * 0.08, z * 0.08]);
+            let noo_b = self.cave_noodle_b.get([x * 0.08, y * 0.08, z * 0.08]);
+            if noo_a.abs() + noo_b.abs() < NOODLE_THRESHOLD {
+                return true;
+            }
         }
 
         false
@@ -229,7 +235,7 @@ fn determine_ore(noise: &TerrainNoise, wx: i32, wy: i32, wz: i32) -> Option<Bloc
     let diamond_weight = triangular_weight(wy, 5, 16, 8);
     if diamond_weight > 0.0 {
         let density = noise.ore_density(wx, wy, wz, 0);
-        if density > 1.0 - diamond_weight * 0.08 {
+        if density > 1.0 - diamond_weight * 0.35 {
             return Some(BlockType::DiamondOre);
         }
     }
@@ -238,7 +244,7 @@ fn determine_ore(noise: &TerrainNoise, wx: i32, wy: i32, wz: i32) -> Option<Bloc
     let gold_weight = triangular_weight(wy, 5, 30, 12);
     if gold_weight > 0.0 {
         let density = noise.ore_density(wx, wy, wz, 1);
-        if density > 1.0 - gold_weight * 0.10 {
+        if density > 1.0 - gold_weight * 0.45 {
             return Some(BlockType::GoldOre);
         }
     }
@@ -247,7 +253,7 @@ fn determine_ore(noise: &TerrainNoise, wx: i32, wy: i32, wz: i32) -> Option<Bloc
     let iron_weight = triangular_weight(wy, 5, 54, 28);
     if iron_weight > 0.0 {
         let density = noise.ore_density(wx, wy, wz, 2);
-        if density > 1.0 - iron_weight * 0.15 {
+        if density > 1.0 - iron_weight * 0.68 {
             return Some(BlockType::IronOre);
         }
     }
@@ -256,7 +262,7 @@ fn determine_ore(noise: &TerrainNoise, wx: i32, wy: i32, wz: i32) -> Option<Bloc
     let coal_weight = triangular_weight(wy, 5, 95, 48);
     if coal_weight > 0.0 {
         let density = noise.ore_density(wx, wy, wz, 3);
-        if density > 1.0 - coal_weight * 0.20 {
+        if density > 1.0 - coal_weight * 0.82 {
             return Some(BlockType::CoalOre);
         }
     }
@@ -267,6 +273,11 @@ fn determine_ore(noise: &TerrainNoise, wx: i32, wy: i32, wz: i32) -> Option<Bloc
 /// Generate a complete chunk at the given chunk position.
 pub fn generate_chunk(chunk_pos: IVec3) -> Chunk {
     with_noise(|noise| generate_chunk_with_noise(chunk_pos, noise))
+}
+
+/// Sample terrain height at a world (x, z) position without generating a full chunk.
+pub fn sample_terrain_height(world_x: i32, world_z: i32) -> i32 {
+    with_noise(|noise| noise.sample_height(world_x, world_z))
 }
 
 fn generate_chunk_with_noise(chunk_pos: IVec3, noise: &TerrainNoise) -> Chunk {
@@ -351,24 +362,23 @@ fn generate_chunk_with_noise(chunk_pos: IVec3, noise: &TerrainNoise) -> Chunk {
                 let wz = world_z_base + z as i32;
                 let current = chunk.get(x, y, z);
 
-                if current == BlockType::Stone {
-                    // Cave carving
-                    let terrain_height = height_map[z][x];
-                    if noise.is_cave(wx, wy, wz, terrain_height) {
-                        let below_sea = wy <= SEA_LEVEL;
-                        chunk.set(
-                            x,
-                            y,
-                            z,
-                            if below_sea {
-                                BlockType::Water
-                            } else {
-                                BlockType::Air
-                            },
-                        );
-                        continue;
-                    }
+                // Cave carving — carves through stone, dirt, sand, grass, gravel, sandstone
+                let terrain_height = height_map[z][x];
+                let is_carveable = matches!(
+                    current,
+                    BlockType::Stone
+                        | BlockType::Dirt
+                        | BlockType::Grass
+                        | BlockType::Sand
+                        | BlockType::Sandstone
+                        | BlockType::Gravel
+                );
+                if is_carveable && noise.is_cave(wx, wy, wz, terrain_height) {
+                    chunk.set(x, y, z, BlockType::Air);
+                    continue;
+                }
 
+                if current == BlockType::Stone {
                     // Gravel patches underground (below Y=60)
                     if wy < 60 && noise.is_gravel(wx, wy, wz) {
                         chunk.set(x, y, z, BlockType::Gravel);

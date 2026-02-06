@@ -516,6 +516,7 @@ pub fn break_block(
     (mut furnaces, mut furnace_open, mut chest_store, mut chest_open): (ResMut<Furnaces>, ResMut<FurnaceOpen>, ResMut<ChestStore>, ResMut<ChestOpen>),
     (mut breaking, mut pending_exhaustion, drop_assets): (ResMut<BreakingState>, ResMut<PendingExhaustion>, Res<crate::entity::dropped_item::DroppedItemAssets>),
     overlay_assets: Res<BreakOverlayAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     let dt = time.delta_secs();
 
@@ -578,10 +579,10 @@ pub fn break_block(
         if can_harvest(held_item, block) {
             let drop_pos = hit.block_pos.as_vec3() + Vec3::splat(0.5);
             if let Some(drop) = block.drop_item() {
-                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, drop, 1, drop_pos);
+                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, drop, 1, drop_pos);
             }
             for (bonus_item, bonus_count) in block.bonus_drops() {
-                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, bonus_item, bonus_count, drop_pos);
+                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, bonus_item, bonus_count, drop_pos);
             }
         }
         // Use tool durability
@@ -645,10 +646,10 @@ pub fn break_block(
         if can_harvest(held_item, target_block) {
             let drop_pos = target_pos.as_vec3() + Vec3::splat(0.5);
             if let Some(drop) = target_block.drop_item() {
-                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, drop, 1, drop_pos);
+                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, drop, 1, drop_pos);
             }
             for (bonus_item, bonus_count) in target_block.bonus_drops() {
-                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, bonus_item, bonus_count, drop_pos);
+                crate::entity::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, bonus_item, bonus_count, drop_pos);
             }
         }
         // Use tool durability
@@ -679,6 +680,7 @@ pub fn place_block(
     mut audio: bevy::ecs::message::MessageWriter<crate::audio::BlockPlaceAudio>,
     mut sapling_tracker: ResMut<crate::world::manager::SaplingTracker>,
     drop_assets: Res<crate::entity::dropped_item::DroppedItemAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     if !mouse.just_pressed(MouseButton::Right) {
         return;
@@ -725,10 +727,10 @@ pub fn place_block(
     if existing != BlockType::Air && existing.is_non_cube() {
         let drop_pos = place_pos.as_vec3() + Vec3::splat(0.5);
         if let Some(drop) = existing.drop_item() {
-            crate::entity::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, drop, 1, drop_pos);
+            crate::entity::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, drop, 1, drop_pos);
         }
         for (bonus_item, bonus_count) in existing.bonus_drops() {
-            crate::entity::dropped_item::spawn_dropped_item(&mut commands, &drop_assets, bonus_item, bonus_count, drop_pos);
+            crate::entity::dropped_item::spawn_dropped_item(&mut commands, &mut meshes, &drop_assets, bonus_item, bonus_count, drop_pos);
         }
         set_block(&mut store, place_pos, BlockType::Air);
     }
@@ -987,66 +989,6 @@ pub fn block_interact(
     }
 }
 
-/// Marker component for the block selection highlight wireframe.
-#[derive(Component)]
-pub struct BlockHighlight;
-
-/// Startup system: spawn the block highlight overlay entity (hidden by default).
-pub fn setup_block_highlight(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
-    let mesh = meshes.add(Cuboid::new(1.005, 1.005, 1.005));
-    let material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.0, 0.0, 0.0, 0.4),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        ..default()
-    });
-    commands.spawn((
-        BlockHighlight,
-        Mesh3d(mesh),
-        MeshMaterial3d(material),
-        Transform::default(),
-        Visibility::Hidden,
-    ));
-}
-
-/// System: move the block highlight wireframe to the block the player is looking at.
-pub fn update_block_highlight(
-    cursor_q: Query<&CursorOptions, With<PrimaryWindow>>,
-    camera_q: Query<&GlobalTransform, With<Camera3d>>,
-    store: Res<ChunkDataStore>,
-    inventory_open: Res<InventoryOpen>,
-    mut highlight_q: Query<(&mut Transform, &mut Visibility), With<BlockHighlight>>,
-) {
-    let Ok((mut transform, mut visibility)) = highlight_q.single_mut() else {
-        return;
-    };
-
-    // Hide if cursor is visible (inventory/menu open)
-    let cursor_locked = cursor_q.single().map_or(false, |c| !c.visible);
-    if !cursor_locked || inventory_open.0 {
-        *visibility = Visibility::Hidden;
-        return;
-    }
-
-    let Ok(cam_global) = camera_q.single() else {
-        *visibility = Visibility::Hidden;
-        return;
-    };
-
-    let origin = cam_global.translation();
-    let forward = cam_global.forward().as_vec3();
-
-    if let Some(hit) = voxel_raycast(origin, forward, REACH_DISTANCE, &store) {
-        transform.translation = hit.block_pos.as_vec3() + Vec3::splat(0.5);
-        *visibility = Visibility::Visible;
-    } else {
-        *visibility = Visibility::Hidden;
-    }
-}
 
 /// System: eat food on right-click when holding a food item.
 /// Runs after block_interact (so we don't eat when interacting with furnace/chest).

@@ -14,13 +14,13 @@ const CHEST_ROWS: usize = 3;
 pub struct ChestUiRoot;
 
 #[derive(Component)]
-pub struct ChestSlot(usize);
+pub struct ChestSlot(pub(crate) usize);
 
 #[derive(Component)]
 pub struct ChestSlotCount(usize);
 
 #[derive(Component)]
-pub struct ChestInvSlot(usize);
+pub struct ChestInvSlot(pub(crate) usize);
 
 #[derive(Component)]
 pub struct ChestInvSlotCount(usize);

@@ -93,7 +93,7 @@ pub fn setup_world(
             base_color_texture: Some(texture),
             perceptual_roughness: 1.0,
             reflectance: 0.1,
-            alpha_mode: AlphaMode::Opaque,
+            alpha_mode: AlphaMode::Mask(0.5),
             ..default()
         },
         extension: AtlasTileMaterial {},

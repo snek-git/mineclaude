@@ -11,7 +11,7 @@ use super::common::*;
 pub struct CraftingTableUiRoot;
 
 #[derive(Component)]
-pub struct CraftingTableSlot(usize);
+pub struct CraftingTableSlot(pub(crate) usize);
 
 #[derive(Component)]
 pub struct CraftingTableSlotCount(usize);
@@ -23,7 +23,7 @@ pub struct CraftingTableOutputSlot;
 pub struct CraftingTableOutputCount;
 
 #[derive(Component)]
-pub struct CraftingTableInvSlot(usize);
+pub struct CraftingTableInvSlot(pub(crate) usize);
 
 #[derive(Component)]
 pub struct CraftingTableInvSlotCount(usize);

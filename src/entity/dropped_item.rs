@@ -1,6 +1,10 @@
+use bevy::asset::RenderAssetUsages;
+use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use rand::Rng;
 
+use crate::block::atlas::{texture_index, tile_uvs};
+use crate::block::{BlockType, Face};
 use crate::inventory::inventory::Inventory;
 use crate::inventory::item::Item;
 use crate::player::Player;
@@ -160,9 +164,60 @@ fn material_for_item(item: Item, assets: &DroppedItemAssets) -> Handle<StandardM
     }
 }
 
+/// Create a small cube mesh with UVs mapped to a specific atlas tile for a block type.
+fn block_item_mesh(block: BlockType) -> Mesh {
+    let s = ITEM_SIZE / 2.0;
+
+    // 6 faces, 4 verts each = 24 verts
+    let face_data: [(Face, [[f32; 3]; 4], [f32; 3]); 6] = [
+        // Top (+Y)
+        (Face::Top, [[-s, s, -s], [s, s, -s], [s, s, s], [-s, s, s]], [0.0, 1.0, 0.0]),
+        // Bottom (-Y)
+        (Face::Bottom, [[-s, -s, s], [s, -s, s], [s, -s, -s], [-s, -s, -s]], [0.0, -1.0, 0.0]),
+        // North (+Z)
+        (Face::North, [[-s, -s, s], [-s, s, s], [s, s, s], [s, -s, s]], [0.0, 0.0, 1.0]),
+        // South (-Z)
+        (Face::South, [[s, -s, -s], [s, s, -s], [-s, s, -s], [-s, -s, -s]], [0.0, 0.0, -1.0]),
+        // East (+X)
+        (Face::East, [[s, -s, s], [s, s, s], [s, s, -s], [s, -s, -s]], [1.0, 0.0, 0.0]),
+        // West (-X)
+        (Face::West, [[-s, -s, -s], [-s, s, -s], [-s, s, s], [-s, -s, s]], [-1.0, 0.0, 0.0]),
+    ];
+
+    let mut positions = Vec::with_capacity(24);
+    let mut normals = Vec::with_capacity(24);
+    let mut uvs = Vec::with_capacity(24);
+    let mut indices = Vec::with_capacity(36);
+
+    for (face, verts, normal) in &face_data {
+        let idx = positions.len() as u32;
+        let ti = texture_index(block, *face);
+        let [u_min, v_min, u_max, v_max] = tile_uvs(ti);
+
+        for v in verts {
+            positions.push(*v);
+            normals.push(*normal);
+        }
+        // UVs: bl, br, tr, tl for the quad
+        uvs.push([u_min, v_max]);
+        uvs.push([u_max, v_max]);
+        uvs.push([u_max, v_min]);
+        uvs.push([u_min, v_min]);
+
+        indices.extend_from_slice(&[idx, idx + 1, idx + 2, idx, idx + 2, idx + 3]);
+    }
+
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_indices(Indices::U32(indices))
+}
+
 /// Spawn a dropped item entity at the given world position.
 pub fn spawn_dropped_item(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
     assets: &DroppedItemAssets,
     item: Item,
     count: u8,
@@ -176,6 +231,12 @@ pub fn spawn_dropped_item(
 
     let material = material_for_item(item, assets);
 
+    // Block items get a custom mesh with correct atlas UVs; non-block items use the plain cube
+    let mesh_handle = match item {
+        Item::Block(bt) => meshes.add(block_item_mesh(bt)),
+        _ => assets.mesh.clone(),
+    };
+
     commands.spawn((
         DroppedItem {
             item,
@@ -185,7 +246,7 @@ pub fn spawn_dropped_item(
         },
         ItemVelocity(Vec3::new(vx, vy, vz)),
         ItemOnGround::default(),
-        Mesh3d(assets.mesh.clone()),
+        Mesh3d(mesh_handle),
         MeshMaterial3d(material),
         Transform::from_translation(position),
         Visibility::default(),

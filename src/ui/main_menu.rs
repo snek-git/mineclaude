@@ -183,8 +183,9 @@ pub fn main_menu_interaction(
                 *sapling_tracker = SaplingTracker::default();
                 *crop_tracker = CropTracker::default();
 
-                // Reset player to default spawn
-                *spawn_point = SpawnPoint::default();
+                // Reset player to default spawn — use actual terrain height
+                let terrain_y = crate::world::generation::sample_terrain_height(0, 0);
+                *spawn_point = SpawnPoint(Vec3::new(0.0, (terrain_y + 1) as f32, 0.0));
                 if let Ok((mut transform, mut vel, mut on_ground, mut fall, mut health, mut air, mut yaw, mut pitch, mut armor, mut hunger)) = player_q.single_mut() {
                     transform.translation = spawn_point.0;
                     *vel = Velocity::default();
