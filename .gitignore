@@ -1,4 +1,7 @@
 /target
 /saves
-.claude/
+.claude/settings*
+.claude/memory/
+.claude/teams/
+.claude/tasks/
 .cargo/

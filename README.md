@@ -1,40 +1,42 @@
 # MineClaude
 
-A Minecraft clone built entirely by **Claude Opus 4.6** using [Claude Code](https://claude.com/claude-code), Anthropic's agentic coding tool. This project is a test of Claude's ability to build a complex, multi-system game from scratch with minimal human intervention.
+A Minecraft clone built entirely by **Claude Opus 4.6** using [Claude Code](https://claude.com/claude-code), Anthropic's agentic coding tool. This project is a test of Claude's ability to build a complex, multi-system game from scratch.
 
 ![Rust](https://img.shields.io/badge/Rust-000000?style=flat&logo=rust&logoColor=white)
 ![Bevy](https://img.shields.io/badge/Bevy_0.18-232326?style=flat&logo=bevy&logoColor=white)
 
 ## What is this?
 
-MineClaude is a voxel engine and survival game inspired by Minecraft, written in Rust using the Bevy 0.18 game engine. It features terrain generation, caves, mining, crafting, combat, hunger, farming, mobs, and more — all implemented autonomously by Claude.
-
-A human directed the project at a high level ("build a Minecraft clone", "add hunger", "fix this bug") but **wrote zero lines of code**. Every line of Rust, every system, every algorithm was authored by Claude.
+MineClaude is a voxel engine and survival game inspired by Minecraft, written in Rust using the Bevy 0.18 game engine. ~14,000 lines of Rust across 41 source files — terrain generation, caves, mining, crafting, combat, hunger, farming, mobs, and more.
 
 ## How it was built
 
-The project used a **continuous autonomous development loop** where Claude operated as a team lead coordinating multiple AI agents:
+The project used a **continuous autonomous development loop**. The full workflow documentation is in [`.claude/WORKFLOW.md`](.claude/WORKFLOW.md), and the project conventions are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
 
-1. **Watchdog agent** scans the codebase for bugs, missing features, and Minecraft inaccuracies
-2. **Lead (Claude)** prioritizes findings and creates tasks
-3. **Implementer agents** are spawned in parallel to build features, each owning specific modules
-4. **Reviewer agent** audits all changes before they're accepted — if issues are found, implementers fix them
-5. **Verify** the build compiles, then loop back to step 1
-
-This ran continuously across 12+ development rounds, with the human only stepping in to playtest and report bugs. Claude managed all coordination, task assignment, code review, and conflict resolution between agents.
-
-### Agent team structure
+The core loop:
 
 ```
-Claude (Team Lead / Delegator)
-  ├── Watchdog Agent     — finds bugs + suggests features
-  ├── Implementer A      — e.g. world generation module
-  ├── Implementer B      — e.g. UI module
-  ├── Implementer C      — e.g. player mechanics
-  └── Reviewer Agent     — mandatory code review gate
+DETECT → PRIORITIZE → IMPLEMENT → TEST → REVIEW → VERIFY → repeat
 ```
 
-Each implementer was assigned strict module ownership (specific files only) to prevent conflicts. The lead never wrote code directly — only coordinated.
+1. **Watchdog agent** continuously scans the codebase for bugs, missing features, and Minecraft inaccuracies
+2. **Lead agent** prioritizes findings and decomposes them into tasks
+3. **Implementer agents** are spawned in parallel, each assigned strict module ownership (specific files only) to prevent conflicts
+4. **Tester agent** writes tests for all new/changed code
+5. **Reviewer agent** audits all changes — if issues are found, they're sent back to the (still-alive) implementers for fixes
+6. **Verify** the build compiles and tests pass, then loop back to step 1
+
+```
+Lead (Delegator — never writes code)
+  ├── Watchdog        — finds bugs + suggests features
+  ├── Implementer A   — e.g. world generation module
+  ├── Implementer B   — e.g. UI module
+  ├── Implementer C   — e.g. player mechanics
+  ├── Tester          — writes tests for changed code
+  └── Reviewer        — mandatory code review gate
+```
+
+This ran across 12+ development rounds. The lead managed all coordination, task assignment, code review, and conflict resolution between agents.
 
 ## Features
 
@@ -89,7 +91,7 @@ cargo run --release
 - **Physics:** Minecraft-accurate values (gravity, drag, jump velocity)
 - **Textures:** ProgrammerArt (CC BY 4.0) packed into a 256x256 atlas at build time
 - **Caves:** 3D noise-based (cheese/spaghetti/noodle) inspired by Minecraft 1.18+
-- **AI:** State-based mob behavior with pathfinding and day/night cycles
+- **AI:** State-based mob behavior with day/night cycles
 
 ## License
 
