@@ -9,6 +9,8 @@ A Minecraft clone built entirely by **Claude Opus 4.6** using [Claude Code](http
 
 MineClaude is a voxel engine and survival game inspired by Minecraft, written in Rust using the Bevy 0.18 game engine. ~14,000 lines of Rust across 41 source files — terrain generation, caves, mining, crafting, combat, hunger, farming, mobs, and more.
 
+The only human involvement was occasional playtesting and bug reports — automated testing can verify that code compiles and unit tests pass, but games need a human in the loop to catch visual glitches, broken physics feel, and gameplay issues that no test suite can detect.
+
 ## How it was built
 
 This project was built using Claude Code's **agent teams** feature — multiple Claude agents running in parallel, coordinating through a shared task list and message passing. One lead agent (never writing code itself) orchestrated the entire process, spawning and managing specialized teammate agents.
